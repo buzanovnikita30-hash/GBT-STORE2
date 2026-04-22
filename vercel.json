@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/chat/auto-reply",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/reviews/sync",
-      "schedule": "0 3 * * 1"
-    }
-  ]
-}
+{}

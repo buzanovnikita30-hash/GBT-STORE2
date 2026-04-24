@@ -28,20 +28,28 @@ export function CallbackContent() {
     }
 
     const redirectToTarget = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!cancelled && data.session) {
-        const syncRes = await fetch("/api/auth/sync-role", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
-        });
-        const syncBody = (await syncRes.json().catch(() => ({}))) as { role?: UserRole };
-        const role: UserRole =
-          syncBody.role === "admin" || syncBody.role === "operator" || syncBody.role === "client"
-            ? syncBody.role
-            : "client";
-        const target = resolvePostLoginPath(returnUrl, role);
-        router.replace(target);
-        router.refresh();
+      // Supabase can materialize a session with a slight delay after callback.
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const { data } = await supabase.auth.getSession();
+        if (!cancelled && data.session) {
+          const syncRes = await fetch("/api/auth/sync-role", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          });
+          const syncBody = (await syncRes.json().catch(() => ({}))) as { role?: UserRole };
+          const role: UserRole =
+            syncBody.role === "admin" || syncBody.role === "operator" || syncBody.role === "client"
+              ? syncBody.role
+              : "client";
+          const target = resolvePostLoginPath(returnUrl, role);
+          router.replace(target);
+          router.refresh();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (!cancelled) {
+        router.replace(`/login?error=callback&returnUrl=${encodeURIComponent(returnUrl)}`);
       }
     };
 

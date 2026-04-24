@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-export async function createClient() {
+import type { Database } from "@/types/database";
+
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -24,14 +26,14 @@ export async function createClient() {
         },
       },
     }
-  );
+  ) as SupabaseClient<Database>;
 }
 
 // Административный клиент (обходит RLS) — только на сервере
-export function createAdminClient() {
+export function createAdminClient(): SupabaseClient<Database> {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  ) as SupabaseClient<Database>;
 }

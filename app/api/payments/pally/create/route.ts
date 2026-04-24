@@ -2,7 +2,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createPallyPayment } from "@/lib/payments/pally";
 import { CHATGPT_PLANS } from "@/lib/chatgpt-data";
-import { notifyNewOrder } from "@/lib/telegram/notifications";
+import { notifyCustomerOrderCreated, notifyNewOrder } from "@/lib/telegram/notifications";
+import { applyPromo, findPromo, getStoreConfig, splitPlans } from "@/lib/store-config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
     }
 
-    const body = (await request.json()) as { planId?: string; accountEmail?: string };
-    const { planId, accountEmail } = body;
+    const body = (await request.json()) as { planId?: string; accountEmail?: string; promoCode?: string | null };
+    const { planId, accountEmail, promoCode } = body;
 
     if (!planId || !accountEmail) {
       return NextResponse.json(
@@ -25,11 +26,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allPlans = [...(CHATGPT_PLANS?.plus ?? []), ...(CHATGPT_PLANS?.pro ?? [])];
+    const config = await getStoreConfig();
+    const split = splitPlans(config.plans);
+    const allPlans = [...(split.plus ?? CHATGPT_PLANS.plus), ...(split.pro ?? CHATGPT_PLANS.pro)];
     const plan = allPlans.find((p) => p.id === planId);
     if (!plan) {
       return NextResponse.json({ error: "Тариф не найден" }, { status: 400 });
     }
+
+    const promo = findPromo(config.promoCodes, promoCode, plan.id);
+    const { finalPrice, discountValue } = applyPromo(plan.price, promo);
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -37,10 +43,19 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         product: plan.productId ?? "chatgpt-plus",
         plan_id: plan.id,
-        price: plan.price,
+        price: finalPrice,
         status: "pending",
         account_email: accountEmail,
         payment_provider: "pally",
+        meta: promo
+          ? {
+              promo_code: promo.code,
+              promo_type: promo.type,
+              promo_value: promo.value,
+              discount_value: discountValue,
+              original_price: plan.price,
+            }
+          : null,
       })
       .select()
       .single();
@@ -54,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const payment = await createPallyPayment({
       orderId: order.id,
-      amount: plan.price,
+      amount: finalPrice,
       description: `GBT STORE: ${plan.name}`,
       returnUrl: `${appUrl}/checkout/success`,
       webhookUrl: `${appUrl}/api/payments/pally/webhook`,
@@ -67,9 +82,18 @@ export async function POST(request: NextRequest) {
       .eq("id", order.id);
 
     await notifyNewOrder(
-      { id: order.id, plan_name: plan.name, price: plan.price, account_email: accountEmail },
+      { id: order.id, plan_name: plan.name, price: finalPrice, account_email: accountEmail },
       { email: user.email ?? null }
     );
+    if (user.email) {
+      await notifyCustomerOrderCreated({
+        customerEmail: user.email,
+        orderId: order.id,
+        planName: plan.name,
+        price: finalPrice,
+        accountEmail,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ paymentUrl: payment.paymentUrl, orderId: order.id });
   } catch (err) {

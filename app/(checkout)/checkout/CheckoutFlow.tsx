@@ -17,7 +17,7 @@ const STEPS = ["Выбор тарифа", "Email аккаунта", "Оплат�
 
 type PaymentMethod = "pally" | "crypto";
 
-export function CheckoutFlow() {
+export function CheckoutFlow({ initialPlans }: { initialPlans?: ExtendedPlan[] }) {
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState(1);
@@ -25,17 +25,21 @@ export function CheckoutFlow() {
   const [accountEmail, setAccountEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pally");
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runtimePlans] = useState<ExtendedPlan[]>(
+    initialPlans && initialPlans.length ? initialPlans : ALL_PLANS
+  );
 
   // Предвыбор тарифа из URL (?plan=plus-std)
   useEffect(() => {
     const planId = searchParams.get("plan");
     if (planId) {
-      const found = ALL_PLANS.find((p) => p.id === planId);
+      const found = runtimePlans.find((p) => p.id === planId);
       if (found) setSelectedPlan(found);
     }
-  }, [searchParams]);
+  }, [searchParams, runtimePlans]);
 
   const { register, handleSubmit, formState: { errors } } = useForm<CheckoutStep2Input>({
     resolver: zodResolver(checkoutStep2Schema),
@@ -60,7 +64,7 @@ export function CheckoutFlow() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: selectedPlan.id, accountEmail }),
+        body: JSON.stringify({ planId: selectedPlan.id, accountEmail, promoCode: promoCode.trim().toUpperCase() || null }),
       });
 
       const json = await res.json() as { paymentUrl?: string; error?: string };
@@ -122,7 +126,7 @@ export function CheckoutFlow() {
           >
             <h2 className="font-heading text-xl font-bold text-gray-900 mb-6">Выберите тариф</h2>
             <div className="space-y-3">
-              {ALL_PLANS.filter(p => p.price > 0).map((plan) => (
+              {runtimePlans.filter(p => p.price > 0).map((plan) => (
                 <button
                   key={plan.id}
                   type="button"
@@ -270,6 +274,17 @@ export function CheckoutFlow() {
             </div>
 
             {/* Terms consent */}
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Промокод (если есть)</label>
+              <input
+                type="text"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                placeholder="Например: SALE10"
+                className="w-full rounded-xl border border-black/[0.12] px-3.5 py-2.5 text-sm outline-none transition-shadow focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/30"
+              />
+            </div>
+
             <label className="flex items-start gap-2.5 cursor-pointer mb-5">
               <input
                 type="checkbox"

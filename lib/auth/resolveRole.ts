@@ -19,7 +19,8 @@ export function resolveRoleByEmail(email: string | null | undefined): UserRole {
   const canonical = canonicalEmail(email);
 
   // Точечное распределение ролей для локального E2E-теста
-  if (canonical === canonicalEmail("nbuzanov0@mailru")) return "operator";
+  // По запросу: buzanovnikita30@gmail.com всегда клиент.
+  if (canonical === canonicalEmail("nikitabuzanov15@mailru")) return "admin";
   if (canonical === canonicalEmail("buzanovnikita30@gmailcom")) return "client";
 
   if (normalized) {

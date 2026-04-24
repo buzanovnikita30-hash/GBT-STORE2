@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Check, Clock, Circle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -48,8 +49,11 @@ export function OrderStatusTracker({
   activatedAt,
   onOpenChat,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState<OrderStatus>(initialStatus);
   const [countdown, setCountdown] = useState<string | null>(null);
+
+  const openChat = onOpenChat ?? (() => router.push("/dashboard/chat"));
 
   // Supabase Realtime — обновление статуса без перезагрузки
   useEffect(() => {
@@ -205,10 +209,10 @@ export function OrderStatusTracker({
       )}
 
       {/* Кнопка написать в поддержку */}
-      {status !== "active" && onOpenChat && (
+      {status !== "active" && (
         <button
           type="button"
-          onClick={onOpenChat}
+          onClick={openChat}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-black/[0.08] py-2.5 text-sm text-gray-600 transition-colors hover:border-[#10a37f]/40 hover:text-[#10a37f]"
         >
           Написать в поддержку

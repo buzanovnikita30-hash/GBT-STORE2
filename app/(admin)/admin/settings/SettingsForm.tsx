@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Loader2, Check } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 interface Props {
   initialSettings: Record<string, unknown>;
@@ -21,19 +20,52 @@ export function SettingsForm({ initialSettings }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pricingJson, setPricingJson] = useState(
+    JSON.stringify(initialSettings.pricing_plans ?? [], null, 2)
+  );
+  const [promoJson, setPromoJson] = useState(
+    JSON.stringify(initialSettings.promo_codes ?? [], null, 2)
+  );
+  const [sectionsJson, setSectionsJson] = useState(
+    JSON.stringify(
+      initialSettings.landing_sections ?? { showReviews: true, showFaq: true, showCompare: true },
+      null,
+      2
+    )
+  );
 
   async function onSave() {
     setSaving(true);
-    const supabase = createClient();
-    for (const field of FIELDS) {
-      await supabase.from("site_settings").upsert({
-        key: field.key,
-        value: field.type === "number" ? Number(values[field.key]) : values[field.key],
+    setError(null);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const field of FIELDS) {
+        payload[field.key] = field.type === "number" ? Number(values[field.key]) : values[field.key];
+      }
+      payload.pricing_plans = JSON.parse(pricingJson);
+      payload.promo_codes = JSON.parse(promoJson);
+      payload.landing_sections = JSON.parse(sectionsJson);
+
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? "Ошибка сохранения настроек");
+        setSaving(false);
+        return;
+      }
+
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setSaving(false);
+      setError("Проверь JSON в ценах, промокодах и видимости блоков.");
     }
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   }
 
   return (
@@ -51,6 +83,42 @@ export function SettingsForm({ initialSettings }: Props) {
           />
         </div>
       ))}
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-300">Тарифы (JSON)</label>
+        <textarea
+          value={pricingJson}
+          onChange={(e) => setPricingJson(e.target.value)}
+          rows={10}
+          className="w-full rounded-xl border border-white/[0.12] bg-white/[0.05] px-3.5 py-2.5 font-mono text-xs text-gray-200 outline-none focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/20"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-300">Промокоды (JSON)</label>
+        <textarea
+          value={promoJson}
+          onChange={(e) => setPromoJson(e.target.value)}
+          rows={8}
+          className="w-full rounded-xl border border-white/[0.12] bg-white/[0.05] px-3.5 py-2.5 font-mono text-xs text-gray-200 outline-none focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/20"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-300">Видимость блоков лендинга (JSON)</label>
+        <textarea
+          value={sectionsJson}
+          onChange={(e) => setSectionsJson(e.target.value)}
+          rows={4}
+          className="w-full rounded-xl border border-white/[0.12] bg-white/[0.05] px-3.5 py-2.5 font-mono text-xs text-gray-200 outline-none focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/20"
+        />
+      </div>
+
+      {error && (
+        <p className="rounded-lg border border-red-700/40 bg-red-900/20 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
       <button
         type="button"

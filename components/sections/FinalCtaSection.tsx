@@ -6,7 +6,7 @@ import { fadeUp } from "@/lib/motion-config";
 
 export function FinalCtaSection() {
   return (
-    <section id="final-cta" className="relative overflow-hidden py-28">
+    <section id="final-cta" className="relative overflow-hidden py-16 md:py-28">
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -24,10 +24,10 @@ export function FinalCtaSection() {
         <span className="mb-4 inline-block text-xs font-semibold uppercase tracking-widest text-[#10a37f]">
           Готовы начать?
         </span>
-        <h2 className="font-heading text-4xl font-bold text-gray-900 md:text-5xl">
+        <h2 className="font-heading text-3xl font-bold text-gray-900 md:text-5xl">
           Подключение за 5–15 минут
         </h2>
-        <p className="mt-4 text-lg text-gray-500">
+        <p className="mt-4 text-base text-gray-500 md:text-lg">
           Гарантия включена. Без иностранной карты. Поддержка 24/7.
         </p>
 
@@ -36,7 +36,7 @@ export function FinalCtaSection() {
             href="/checkout"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            className="inline-flex items-center gap-2 rounded-xl px-10 py-5 text-xl font-semibold text-white shadow-lg"
+            className="inline-flex items-center gap-2 rounded-xl px-6 py-3.5 text-base font-semibold text-white shadow-lg md:px-10 md:py-5 md:text-xl"
             style={{
               background: "#10a37f",
               boxShadow: "0 4px 30px rgba(16,163,127,0.35)",
@@ -47,7 +47,7 @@ export function FinalCtaSection() {
           </motion.a>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-8">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 md:gap-8">
           {[
             { icon: Lock, text: "Без иностранной карты" },
             { icon: Clock3, text: "Активация 5–15 минут" },

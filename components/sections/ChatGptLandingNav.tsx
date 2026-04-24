@@ -16,7 +16,7 @@ export function ChatGptLandingNav() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.06] bg-white/90 backdrop-blur-xl transition-all duration-300">
+    <header className="fixed left-0 right-0 top-0 z-50 border-b border-black/[0.06] bg-white/90 backdrop-blur-xl transition-colors duration-150">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 md:px-6">
         <Link href="/" className="font-heading text-base font-semibold text-gray-900">
           GBT <span style={{ color: "#10a37f" }}>STORE</span>
@@ -28,7 +28,7 @@ export function ChatGptLandingNav() {
             <a
               key={link.href}
               href={link.href}
-              className="transition-colors hover:text-gray-900"
+              className="transition-colors duration-100 hover:text-gray-900"
             >
               {link.label}
             </a>
@@ -39,20 +39,20 @@ export function ChatGptLandingNav() {
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard"
-            className="hidden items-center gap-1.5 rounded-lg border border-black/[0.1] px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 sm:flex"
+            className="hidden items-center gap-1.5 rounded-lg border border-black/[0.1] px-3 py-1.5 text-sm text-gray-600 transition-colors duration-100 hover:bg-gray-50 sm:flex"
           >
             <User size={14} />
             Кабинет
           </Link>
           <a
             href="/checkout"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity duration-100 hover:opacity-90 sm:px-4 sm:py-2 sm:text-sm"
             style={{ background: "#10a37f" }}
           >
             Подключить
           </a>
           <button
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors duration-100 hover:bg-gray-100 md:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Закрыть меню" : "Открыть меню"}
           >
@@ -77,7 +77,7 @@ export function ChatGptLandingNav() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                  className="rounded-lg px-3 py-2.5 text-sm text-gray-600 transition-colors duration-100 hover:bg-gray-50 hover:text-gray-900"
                 >
                   {link.label}
                 </a>

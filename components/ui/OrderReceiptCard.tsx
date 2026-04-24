@@ -111,7 +111,7 @@ export function OrderReceiptCard({ product, planId, price, activatedAt, expiresA
       </div>
 
       {/* Actions */}
-      <div className="grid grid-cols-2 gap-2 px-5 pb-4">
+      <div className="grid grid-cols-3 gap-2 px-5 pb-4">
         <Link
           href={`/checkout?plan=${planId}`}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-[#10a37f]/30 bg-[#10a37f]/5 py-2.5 text-xs font-bold text-[#10a37f] hover:bg-[#10a37f]/10 transition-colors"
@@ -125,6 +125,12 @@ export function OrderReceiptCard({ product, planId, price, activatedAt, expiresA
         >
           <MessageCircle size={13} />
           Поддержка
+        </Link>
+        <Link
+          href="/reviews"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+        >
+          ⭐ Оставить отзыв
         </Link>
       </div>
     </motion.div>

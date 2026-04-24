@@ -1,14 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PLUS_PLANS, PRO_PLANS, PRODUCTS, type ProductId } from "@/lib/chatgpt-data";
 import { fadeUp } from "@/lib/motion-config";
 
-export function PricingSection() {
-  const [activeProduct, setActiveProduct] = useState<ProductId>("chatgpt-plus");
+type RuntimePlan = (typeof PLUS_PLANS)[number] & {
+  original_price?: number;
+  landing_discount_name?: string | null;
+};
 
-  const plans = activeProduct === "chatgpt-plus" ? PLUS_PLANS : PRO_PLANS;
+export function PricingSection({
+  initialPlans,
+}: {
+  initialPlans?: RuntimePlan[];
+  initialLandingDiscounts?: unknown[];
+}) {
+  const [activeProduct, setActiveProduct] = useState<ProductId>("chatgpt-plus");
+  const [runtimePlans] = useState<RuntimePlan[]>(
+    initialPlans && initialPlans.length ? initialPlans : [...PLUS_PLANS, ...PRO_PLANS]
+  );
+
+  const plans = useMemo(
+    () => runtimePlans.filter((p) => p.productId === activeProduct),
+    [runtimePlans, activeProduct]
+  );
   const product = PRODUCTS.find((p) => p.id === activeProduct)!;
 
   return (
@@ -43,12 +59,12 @@ export function PricingSection() {
 
         {/* Product switcher */}
         <div className="mb-10 flex justify-center">
-          <div className="flex gap-1 rounded-2xl border border-black/[0.08] bg-white p-1.5">
+          <div className="flex w-full max-w-sm gap-1 rounded-2xl border border-black/[0.08] bg-white p-1.5 sm:w-auto sm:max-w-none">
             {PRODUCTS.map((prod) => (
               <motion.button
                 key={prod.id}
                 onClick={() => setActiveProduct(prod.id)}
-                className="relative rounded-xl px-6 py-2.5 text-sm font-semibold transition-colors duration-200"
+                className="relative flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-colors duration-200 sm:flex-none md:px-6 md:py-2.5 md:text-sm"
                 style={{ color: activeProduct === prod.id ? "white" : "#6b7280" }}
               >
                 {activeProduct === prod.id && (
@@ -111,7 +127,17 @@ export function PricingSection() {
             transition={{ duration: 0.35 }}
             className="grid grid-cols-1 gap-6 md:grid-cols-3"
           >
-            {plans.map((plan, index) => (
+            {plans.map((plan, index) => {
+              const original = plan.original_price ?? plan.price;
+              const displayPrice = plan.price;
+              const discountLabel = plan.landing_discount_name ?? null;
+              const showDiscount = original > displayPrice;
+              const ctaText =
+                plan.price > 0
+                  ? `Подключить за ${displayPrice.toLocaleString("ru")} ${plan.currency}`
+                  : plan.cta;
+
+              return (
               <motion.article
                 key={plan.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -128,14 +154,21 @@ export function PricingSection() {
                     : { border: "1px solid rgba(0,0,0,0.08)" }
                 }
               >
-                {plan.badge && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                {(plan.badge || (showDiscount && discountLabel)) && (
+                  <div className="absolute -top-3.5 left-1/2 flex -translate-x-1/2 flex-wrap justify-center gap-1">
+                    {plan.badge && (
                     <span
                       className="rounded-full px-4 py-1 text-xs font-bold text-white"
                       style={{ background: product.accentColor }}
                     >
                       {plan.badge}
                     </span>
+                    )}
+                    {showDiscount && discountLabel && (
+                      <span className="rounded-full bg-amber-500 px-3 py-1 text-[10px] font-bold text-white">
+                        {discountLabel}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -144,8 +177,13 @@ export function PricingSection() {
                   <div className="flex items-baseline gap-1.5">
                     {plan.price > 0 ? (
                       <>
+                        {showDiscount && (
+                          <span className="mr-1 font-heading text-xl font-semibold text-gray-400 line-through">
+                            {original.toLocaleString("ru")}
+                          </span>
+                        )}
                         <span className="font-heading text-4xl font-bold text-gray-900">
-                          {plan.price.toLocaleString("ru")}
+                          {displayPrice.toLocaleString("ru")}
                         </span>
                         <span className="text-lg text-gray-400">{plan.currency}</span>
                       </>
@@ -211,7 +249,7 @@ export function PricingSection() {
                             }
                       }
                     >
-                      {plan.cta}
+                      {ctaText}
                     </motion.a>
                   ) : (
                     <a
@@ -223,7 +261,8 @@ export function PricingSection() {
                   )}
                 </div>
               </motion.article>
-            ))}
+            );
+            })}
           </motion.div>
         </AnimatePresence>
 

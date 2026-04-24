@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useSafePathname } from "@/lib/client/useSafePathname";
 
 declare global {
   interface Window {
@@ -12,7 +12,7 @@ declare global {
 const YM_ID = Number(process.env.NEXT_PUBLIC_YM_ID);
 
 export function YandexMetrika() {
-  const pathname = usePathname();
+  const pathname = useSafePathname();
 
   useEffect(() => {
     if (!YM_ID) return;

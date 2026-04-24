@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { OrderStatusTracker } from "@/components/ui/OrderStatusTracker";
 import { OrderReceiptCard } from "@/components/ui/OrderReceiptCard";
 import Link from "next/link";
@@ -104,7 +104,9 @@ export default async function OrdersPage() {
                       initialStatus={order.status as OrderStatus}
                       planId={order.plan_id}
                       activatedAt={order.activated_at}
-                      onOpenChat={() => window.open("/support", "_blank")}
+                      onOpenChat={() => {
+                        window.location.href = "/dashboard/chat";
+                      }}
                     />
                   )}
 
@@ -149,7 +151,7 @@ export default async function OrdersPage() {
       {/* Bottom CTA */}
       <div className="flex gap-3 flex-wrap pt-2">
         <Link
-          href="/support"
+          href="/dashboard/chat"
           className="flex items-center gap-2 rounded-xl border border-black/[0.08] px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
         >
           Написать в поддержку

@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+﻿import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { DashboardClient } from "./DashboardClient";
 
@@ -10,7 +10,8 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from("profiles")
     .select("username, email, created_at")
     .eq("id", user.id)
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
     <DashboardClient
       userEmail={user.email ?? ""}
       username={profile?.username ?? null}
-      profileCreatedAt={profile?.created_at ?? new Date().toISOString()}
+      profileCreatedAt={profile?.created_at ?? user.created_at ?? new Date().toISOString()}
       orders={allOrders}
       ordersCount={ordersCount}
       activeCount={activeCount}

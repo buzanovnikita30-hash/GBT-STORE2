@@ -1,7 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
+
+/** Базовый размер кольца (px) — на десктопе чуть меньше прежнего 26. */
+const RING_SIZE = 20
+/** Масштаб при наведении на кликабельные элементы (визуально ~30px). */
+const RING_HOVER_SCALE = 30 / RING_SIZE
+const DOT_SIZE = 4
+
+const INTERACTIVE = 'a,button,[role="button"],input,textarea,select,label'
 
 export function CursorTrail() {
   const mx = useMotionValue(-300)
@@ -9,14 +17,19 @@ export function CursorTrail() {
   const dx = useMotionValue(-300)
   const dy = useMotionValue(-300)
 
-  const ringX = useSpring(mx, { damping: 28, stiffness: 200, mass: 0.5 })
-  const ringY = useSpring(my, { damping: 28, stiffness: 200, mass: 0.5 })
-  const dotX = useSpring(dx, { damping: 50, stiffness: 600 })
-  const dotY = useSpring(dy, { damping: 50, stiffness: 600 })
+  const ringX = useSpring(mx, { damping: 32, stiffness: 320, mass: 0.35 })
+  const ringY = useSpring(my, { damping: 32, stiffness: 320, mass: 0.35 })
+  const dotX = useSpring(dx, { damping: 55, stiffness: 700 })
+  const dotY = useSpring(dy, { damping: 55, stiffness: 700 })
 
   const [hover, setHover] = useState(false)
   const [visible, setVisible] = useState(false)
   const [touch, setTouch] = useState(false)
+
+  const hoverRef = useRef(false)
+  const visibleRef = useRef(false)
+  const rafId = useRef<number | null>(null)
+  const pos = useRef({ x: 0, y: 0 })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -24,26 +37,54 @@ export function CursorTrail() {
       setTouch(true)
       return
     }
+
+    const applyPos = () => {
+      rafId.current = null
+      const { x, y } = pos.current
+      mx.set(x)
+      my.set(y)
+      dx.set(x)
+      dy.set(y)
+    }
+
     const move = (e: MouseEvent) => {
-      mx.set(e.clientX)
-      my.set(e.clientY)
-      dx.set(e.clientX)
-      dy.set(e.clientY)
+      pos.current.x = e.clientX
+      pos.current.y = e.clientY
+      if (rafId.current === null) {
+        rafId.current = requestAnimationFrame(applyPos)
+      }
+
+      const t = e.target as HTMLElement
+      const next = !!t.closest(INTERACTIVE)
+      if (next !== hoverRef.current) {
+        hoverRef.current = next
+        setHover(next)
+      }
+
+      if (!visibleRef.current) {
+        visibleRef.current = true
+        setVisible(true)
+      }
+    }
+
+    const leave = () => {
+      visibleRef.current = false
+      setVisible(false)
+    }
+    const enter = () => {
+      visibleRef.current = true
       setVisible(true)
     }
-    const over = (e: MouseEvent) => {
-      const t = e.target as HTMLElement
-      setHover(!!t.closest('a,button,[role="button"],input,textarea,select,label'))
-    }
-    const leave = () => setVisible(false)
-    const enter = () => setVisible(true)
-    document.addEventListener('mousemove', move)
-    document.addEventListener('mouseover', over)
+
+    document.addEventListener('mousemove', move, { passive: true })
     document.addEventListener('mouseleave', leave)
     document.addEventListener('mouseenter', enter)
     return () => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current)
+        rafId.current = null
+      }
       document.removeEventListener('mousemove', move)
-      document.removeEventListener('mouseover', over)
       document.removeEventListener('mouseleave', leave)
       document.removeEventListener('mouseenter', enter)
     }
@@ -53,46 +94,46 @@ export function CursorTrail() {
 
   return (
     <>
-      {/* КОЛЬЦО — яркое зелёное с glow */}
+      {/* Кольцо: фиксированный размер + scale — без layout на каждом кадре */}
       <motion.div
-        className="fixed top-0 left-0 pointer-events-none rounded-full"
+        className="fixed top-0 left-0 pointer-events-none rounded-full will-change-transform"
         style={{
           x: ringX,
           y: ringY,
           translateX: '-50%',
           translateY: '-50%',
           zIndex: 999999,
-          border: '2.5px solid #10a37f',
-          borderColor: '#10a37f',
+          width: RING_SIZE,
+          height: RING_SIZE,
+          border: '2px solid #10a37f',
         }}
+        initial={false}
         animate={{
-          width: hover ? 40 : 26,
-          height: hover ? 40 : 26,
+          scale: hover ? RING_HOVER_SCALE : 1,
           opacity: visible ? 1 : 0,
-          borderColor: '#10a37f',
           backgroundColor: hover
-            ? 'rgba(16,163,127,0.15)'
-            : 'rgba(16,163,127,0.05)',
+            ? 'rgba(16,163,127,0.12)'
+            : 'rgba(16,163,127,0.04)',
           boxShadow: hover
-            ? '0 0 12px rgba(16,163,127,0.6), 0 0 24px rgba(16,163,127,0.3)'
-            : '0 0 8px rgba(16,163,127,0.4)',
+            ? '0 0 10px rgba(16,163,127,0.5), 0 0 18px rgba(16,163,127,0.22)'
+            : '0 0 6px rgba(16,163,127,0.32)',
         }}
-        transition={{ duration: 0.12 }}
+        transition={{ type: 'tween', duration: 0.12, ease: 'easeOut' }}
       />
-      {/* ТОЧКА — ярко зелёная, точная */}
       <motion.div
-        className="fixed top-0 left-0 pointer-events-none rounded-full"
+        className="fixed top-0 left-0 pointer-events-none rounded-full will-change-transform"
         style={{
           x: dotX,
           y: dotY,
           translateX: '-50%',
           translateY: '-50%',
           zIndex: 999999,
-          width: 5,
-          height: 5,
+          width: DOT_SIZE,
+          height: DOT_SIZE,
           backgroundColor: '#10a37f',
-          boxShadow: '0 0 6px rgba(16,163,127,0.8)',
+          boxShadow: '0 0 4px rgba(16,163,127,0.75)',
         }}
+        initial={false}
         animate={{ opacity: visible ? 1 : 0 }}
         transition={{ duration: 0.08 }}
       />

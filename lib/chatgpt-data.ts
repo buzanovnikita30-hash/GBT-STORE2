@@ -347,14 +347,12 @@ export interface ExtendedPlan {
 export const PLUS_PLANS: ExtendedPlan[] = PLUS_PLANS_NEW;
 
 // PRO_PLANS — один тариф на 1 месяц
-// ⚠️ PLACEHOLDER: уточнить цену у владельца перед запуском
 export const PRO_PLANS: ExtendedPlan[] = [
   {
     id: "pro-1",
     productId: "chatgpt-pro",
     name: "1 месяц",
-    // ⚠️ ВСТАВИТЬ ЦЕНУ ПЕРЕД ЗАПУСКОМ
-    price: 0,
+    price: 14990,
     currency: "₽",
     period: "мес",
     badge: "Pro",
@@ -370,7 +368,7 @@ export const PRO_PLANS: ExtendedPlan[] = [
       "Гарантия на весь срок",
     ],
     isPopular: true,
-    cta: "Подключить Pro",
+    cta: "Подключить Pro за 14 990 ₽",
   },
 ];
 

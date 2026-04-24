@@ -1,54 +1,64 @@
-﻿import { createClient } from "@/lib/supabase/server";
+﻿import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/requireAdminPage";
+import { UsersRoleManager } from "./UsersRoleManager";
 
-export const metadata: Metadata = { title: "Admin � ������������" };
+export const metadata: Metadata = { title: "Admin · Пользователи" };
 
 export default async function AdminUsersPage() {
-  const supabase = await createClient();
+  await requireAdminPage();
+
+  const session = await createClient();
+  const {
+    data: { user },
+  } = await session.auth.getUser();
+
+  const supabase = createAdminClient();
 
   const { data: users } = await supabase
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(200);
+
+  const userIds = (users ?? []).map((u) => u.id);
+  const { data: orders } = userIds.length
+    ? await supabase
+        .from("orders")
+        .select("id, user_id, price, status, created_at")
+        .in("user_id", userIds)
+    : { data: [] };
+
+  const ordersByUser = new Map<string, { count: number; paidTotal: number; lastOrderAt: string | null }>();
+  for (const o of orders ?? []) {
+    const key = o.user_id ?? "";
+    if (!key) continue;
+    const prev = ordersByUser.get(key) ?? { count: 0, paidTotal: 0, lastOrderAt: null };
+    prev.count += 1;
+    if (["paid", "activating", "active", "waiting_client"].includes(o.status ?? "")) {
+      prev.paidTotal += Number(o.price ?? 0);
+    }
+    if (!prev.lastOrderAt || new Date(o.created_at).getTime() > new Date(prev.lastOrderAt).getTime()) {
+      prev.lastOrderAt = o.created_at;
+    }
+    ordersByUser.set(key, prev);
+  }
+
+  const preparedUsers = (users ?? []).map((u) => ({
+    ...u,
+    role: (u.role ?? "client") as "client" | "operator" | "admin",
+    ordersCount: ordersByUser.get(u.id)?.count ?? 0,
+    paidTotal: ordersByUser.get(u.id)?.paidTotal ?? 0,
+    lastOrderAt: ordersByUser.get(u.id)?.lastOrderAt ?? null,
+  }));
 
   return (
     <div className="p-6">
-      <h1 className="font-heading text-2xl font-bold text-gray-100 mb-6">������������</h1>
-      <div className="overflow-x-auto rounded-xl border border-white/[0.07]">
-        <table className="w-full">
-          <thead className="border-b border-white/[0.07] bg-white/[0.02]">
-            <tr className="text-left text-xs font-semibold uppercase tracking-widest text-gray-500">
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Telegram</th>
-              <th className="px-4 py-3">����</th>
-              <th className="px-4 py-3">����</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.05]">
-            {(users ?? []).map((u) => (
-              <tr key={u.id} className="text-sm text-gray-300">
-                <td className="px-4 py-3">{u.email ?? <span className="text-gray-600">�</span>}</td>
-                <td className="px-4 py-3 text-xs text-gray-400">
-                  {u.telegram_username ? "@" + u.telegram_username : "�"}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    u.role === "admin" ? "bg-red-900/30 text-red-400"
-                    : u.role === "operator" ? "bg-blue-900/30 text-blue-400"
-                    : "bg-gray-800 text-gray-400"
-                  }`}>
-                    {u.role}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-500">
-                  {new Date(u.created_at).toLocaleDateString("ru")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <h1 className="mb-2 font-heading text-2xl font-bold text-gray-100">Пользователи</h1>
+      <p className="mb-5 text-sm text-gray-400">
+        Здесь можно назначить оператора, передать права администратора и просмотреть клиентов.
+      </p>
+      <UsersRoleManager users={preparedUsers} currentUserId={user?.id ?? ""} />
     </div>
   );
 }

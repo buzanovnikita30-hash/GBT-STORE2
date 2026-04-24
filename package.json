@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\"",
+    "dev": "npm run clean && next dev",
+    "clean": "node scripts/clean-next.js",
     "dev:clean": "npm run clean && next dev",
     "build:clean": "npm run clean && next build",
     "build": "next build",

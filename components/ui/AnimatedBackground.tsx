@@ -17,6 +17,7 @@ interface WaveStream {
   dotCount: number    // dots per column
   solid?: boolean     // draw solid line instead of dots
   lineWidth?: number
+  opacityScale?: number
 }
 
 function WaveParticleCanvas() {
@@ -47,44 +48,44 @@ function WaveParticleCanvas() {
     const streams: WaveStream[] = [
       // Main green particle wave
       {
-        yBase: 0.40, amplitude: 0.13, frequency: 0.0055, phase: 0,
+        yBase: 0.46, amplitude: 0.16, frequency: 0.0055, phase: 0,
         speed: 0.0006, color: '16,163,127',
-        dotSpacing: 9, spread: 38, dotRadius: 1.8, dotOpacity: 0.55, dotCount: 8,
+        dotSpacing: 9, spread: 44, dotRadius: 1.8, dotOpacity: 0.6, dotCount: 8, opacityScale: 1.2,
       },
       // Wide soft green band
       {
-        yBase: 0.44, amplitude: 0.11, frequency: 0.006, phase: Math.PI * 0.9,
+        yBase: 0.50, amplitude: 0.14, frequency: 0.006, phase: Math.PI * 0.9,
         speed: 0.0005, color: '16,163,127',
-        dotSpacing: 10, spread: 55, dotRadius: 1.4, dotOpacity: 0.30, dotCount: 10,
+        dotSpacing: 10, spread: 64, dotRadius: 1.5, dotOpacity: 0.35, dotCount: 10, opacityScale: 1.15,
       },
       // Blue particle wave
       {
-        yBase: 0.52, amplitude: 0.14, frequency: 0.0048, phase: Math.PI * 1.6,
+        yBase: 0.58, amplitude: 0.16, frequency: 0.0048, phase: Math.PI * 1.6,
         speed: 0.00045, color: '26,86,219',
-        dotSpacing: 10, spread: 42, dotRadius: 1.7, dotOpacity: 0.45, dotCount: 9,
+        dotSpacing: 10, spread: 48, dotRadius: 1.8, dotOpacity: 0.48, dotCount: 9, opacityScale: 1.2,
       },
       // Cyan thin wave
       {
-        yBase: 0.48, amplitude: 0.09, frequency: 0.0075, phase: Math.PI * 0.4,
+        yBase: 0.54, amplitude: 0.11, frequency: 0.0075, phase: Math.PI * 0.4,
         speed: 0.0007, color: '77,217,224',
-        dotSpacing: 8, spread: 25, dotRadius: 1.3, dotOpacity: 0.38, dotCount: 6,
+        dotSpacing: 8, spread: 30, dotRadius: 1.4, dotOpacity: 0.42, dotCount: 6, opacityScale: 1.1,
       },
       // Fine blue band
       {
-        yBase: 0.56, amplitude: 0.10, frequency: 0.005, phase: Math.PI * 1.1,
+        yBase: 0.62, amplitude: 0.11, frequency: 0.005, phase: Math.PI * 1.1,
         speed: 0.0004, color: '26,86,219',
-        dotSpacing: 11, spread: 30, dotRadius: 1.2, dotOpacity: 0.28, dotCount: 7,
+        dotSpacing: 11, spread: 34, dotRadius: 1.3, dotOpacity: 0.32, dotCount: 7, opacityScale: 1.1,
       },
       // Solid green line 1
       {
-        yBase: 0.41, amplitude: 0.12, frequency: 0.0055, phase: 0.3,
+        yBase: 0.47, amplitude: 0.14, frequency: 0.0055, phase: 0.3,
         speed: 0.0006, color: '16,163,127',
         dotSpacing: 1, spread: 0, dotRadius: 0, dotOpacity: 0, dotCount: 0,
         solid: true, lineWidth: 1.8,
       },
       // Solid blue line
       {
-        yBase: 0.53, amplitude: 0.135, frequency: 0.0048, phase: Math.PI * 1.5,
+        yBase: 0.59, amplitude: 0.15, frequency: 0.0048, phase: Math.PI * 1.5,
         speed: 0.00045, color: '26,86,219',
         dotSpacing: 1, spread: 0, dotRadius: 0, dotOpacity: 0, dotCount: 0,
         solid: true, lineWidth: 1.4,
@@ -133,7 +134,7 @@ function WaveParticleCanvas() {
             const distRatio = Math.abs(yOffset) / s.spread
             // Opacity falls off away from center
             const opacityFactor = Math.max(0, 1 - distRatio * distRatio * 1.4)
-            const finalOpacity = s.dotOpacity * opacityFactor
+            const finalOpacity = s.dotOpacity * opacityFactor * (s.opacityScale ?? 1)
 
             if (finalOpacity < 0.02) continue
 
@@ -163,7 +164,7 @@ function WaveParticleCanvas() {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full"
-      style={{ opacity: 0.65 }}
+      style={{ opacity: 0.88 }}
     />
   )
 }

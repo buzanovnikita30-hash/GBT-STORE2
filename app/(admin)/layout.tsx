@@ -1,16 +1,20 @@
 ﻿import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { resolveServerRole } from "@/lib/auth/server-role";
 import {
   LayoutDashboard, ShoppingBag, MessageCircle,
-  Star, Settings, Users
+  Star, Settings, Users, UserCircle, Percent, Tag,
 } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Главная", icon: LayoutDashboard },
   { href: "/admin/orders", label: "Заказы", icon: ShoppingBag },
+  { href: "/admin/clients", label: "Клиенты", icon: UserCircle },
   { href: "/admin/users", label: "Пользователи", icon: Users },
   { href: "/admin/chat", label: "Чат", icon: MessageCircle },
+  { href: "/admin/promocodes", label: "Промокоды", icon: Tag },
+  { href: "/admin/discounts", label: "Скидки", icon: Percent },
   { href: "/admin/reviews", label: "Отзывы", icon: Star },
   { href: "/admin/settings", label: "Настройки", icon: Settings },
 ];
@@ -27,15 +31,16 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["admin", "operator"].includes(profile.role)) {
+  const role = await resolveServerRole(user);
+  if (!["admin", "operator"].includes(role)) {
     redirect("/dashboard");
   }
+  const navItems = (role === "admin"
+    ? NAV
+    : NAV.filter((item) =>
+        ["/admin", "/admin/orders", "/admin/chat", "/admin/clients"].includes(item.href)
+      )
+  );
 
   return (
     <div className="flex min-h-screen bg-gray-950 text-gray-100">
@@ -46,7 +51,7 @@ export default async function AdminLayout({
           </span>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -58,6 +63,20 @@ export default async function AdminLayout({
           ))}
         </nav>
         <div className="border-t border-white/[0.07] p-2">
+          <Link
+            href="/login?switch=1"
+            className="mb-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-gray-300"
+          >
+            Сменить аккаунт
+          </Link>
+          <form action="/api/auth/signout" method="POST">
+            <button
+              type="submit"
+              className="mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-gray-500 hover:text-gray-300"
+            >
+              Выйти
+            </button>
+          </form>
           <Link
             href="/"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-gray-300"

@@ -14,7 +14,7 @@ export function HeroSection() {
   return (
     <section
       id="hero"
-      className="relative flex min-h-screen items-center overflow-hidden px-4 py-20 md:px-6"
+      className="relative flex min-h-[calc(100dvh-3.5rem)] items-center overflow-hidden px-4 py-14 md:min-h-screen md:px-6 md:py-20"
     >
       {/* Градиент-фон с параллаксом */}
       <motion.div
@@ -54,7 +54,7 @@ export function HeroSection() {
           {/* H1 */}
           <motion.h1
             variants={fadeUp}
-            className="font-heading text-4xl font-bold leading-tight tracking-tight text-gray-900 md:text-6xl lg:text-7xl"
+            className="font-heading text-3xl font-bold leading-tight tracking-tight text-gray-900 md:text-6xl lg:text-7xl"
           >
             <span className="block">{HERO_CONTENT.title}</span>
             <span
@@ -71,7 +71,7 @@ export function HeroSection() {
           </motion.h1>
 
           {/* Subtitle */}
-          <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-lg text-gray-500">
+          <motion.p variants={fadeUp} className="mt-6 max-w-2xl text-base text-gray-500 md:text-lg">
             {HERO_CONTENT.subtitle}
           </motion.p>
 

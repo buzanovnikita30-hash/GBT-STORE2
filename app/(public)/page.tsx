@@ -18,8 +18,11 @@ import { TokenSafetySection } from "@/components/sections/TokenSafetySection";
 import { WhyCheaperSection } from "@/components/sections/WhyCheaperSection";
 import { LandingFooter } from "@/components/layout/LandingFooter";
 import { getPublicSiteOrigin } from "@/lib/app-url";
+import { getPublicReviews } from "@/lib/reviews/publicReviews";
+import { getStoreConfig } from "@/lib/store-config";
 
 const APP_URL = getPublicSiteOrigin();
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "ChatGPT Plus без иностранной карты",
@@ -49,7 +52,12 @@ const jsonLd = {
   },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const storeConfig = await getStoreConfig();
+  const reviews = await getPublicReviews(40, {
+    uniqueAuthors: true,
+  });
+
   return (
     <>
     <script
@@ -67,11 +75,19 @@ export default function HomePage() {
           <AnimateSection delay={0.05}><TokenSafetySection /></AnimateSection>
           <AnimateSection delay={0.05}><RussiaSection /></AnimateSection>
           <AnimateSection delay={0.05}><WhyCheaperSection /></AnimateSection>
-          <AnimateSection delay={0.05}><ReviewsSection /></AnimateSection>
-          <AnimateSection delay={0.05}><CompareSection /></AnimateSection>
-          <AnimateSection delay={0.05}><PricingSection /></AnimateSection>
+          {storeConfig.landingSections.showReviews && (
+            <AnimateSection delay={0.05}><ReviewsSection reviews={reviews} /></AnimateSection>
+          )}
+          {storeConfig.landingSections.showCompare && (
+            <AnimateSection delay={0.05}><CompareSection /></AnimateSection>
+          )}
+          <AnimateSection delay={0.05}>
+            <PricingSection initialPlans={storeConfig.plans} initialLandingDiscounts={storeConfig.landingDiscounts} />
+          </AnimateSection>
           <AnimateSection delay={0.05}><GuaranteeSection /></AnimateSection>
-          <AnimateSection delay={0.05}><FaqSection /></AnimateSection>
+          {storeConfig.landingSections.showFaq && (
+            <AnimateSection delay={0.05}><FaqSection /></AnimateSection>
+          )}
           <AnimateSection delay={0.05}><CrossSellSection /></AnimateSection>
           <AnimateSection delay={0.05}><FinalCtaSection /></AnimateSection>
         </main>

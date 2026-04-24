@@ -25,7 +25,7 @@ export function ChatSwitcher({ sessionId, userId, defaultTab = "ai" }: Props) {
           type="button"
           onClick={() => setTab("ai")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors duration-100",
             tab === "ai"
               ? "bg-white text-[#10a37f] shadow-sm"
               : "text-gray-500 hover:text-gray-700"
@@ -38,7 +38,7 @@ export function ChatSwitcher({ sessionId, userId, defaultTab = "ai" }: Props) {
           type="button"
           onClick={() => setTab("operator")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all",
+            "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors duration-100",
             tab === "operator"
               ? "bg-white text-[#1a56db] shadow-sm"
               : "text-gray-500 hover:text-gray-700"

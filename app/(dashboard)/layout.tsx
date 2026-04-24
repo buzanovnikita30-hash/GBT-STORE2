@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { DashboardNav, DashboardMobileNav } from "./DashboardNav";
+import { resolveServerRole } from "@/lib/auth/server-role";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +15,11 @@ export default async function DashboardLayout({
 
   if (!user) {
     redirect("/login?returnUrl=/dashboard");
+  }
+
+  const role = await resolveServerRole(user);
+  if (role === "admin" || role === "operator") {
+    redirect("/admin");
   }
 
   return (

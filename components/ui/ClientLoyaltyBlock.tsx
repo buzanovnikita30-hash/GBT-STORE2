@@ -33,13 +33,13 @@ function getBonusTier(completed: number) {
     return { name: "Золотой", color: "#f59e0b", bg: "#fef3c7", discount: 15, nextAt: null };
   if (completed >= 5)
     return { name: "Серебряный", color: "#6366f1", bg: "#ede9fe", discount: 10, nextAt: 10 };
-  if (completed >= 2)
+  if (completed >= 3)
     return { name: "Бронзовый", color: "#b45309", bg: "#fef9c3", discount: 5, nextAt: 5 };
-  return { name: "Новичок", color: "#10a37f", bg: "#d1fae5", discount: 0, nextAt: 2 };
+  return { name: "Новичок", color: "#10a37f", bg: "#d1fae5", discount: 0, nextAt: 3 };
 }
 
 function getNextTier(completed: number) {
-  if (completed < 2) return { name: "Бронзовый", needed: 2 - completed, total: 2 };
+  if (completed < 3) return { name: "Бронзовый", needed: 3 - completed, total: 3 };
   if (completed < 5) return { name: "Серебряный", needed: 5 - completed, total: 5 };
   if (completed < 10) return { name: "Золотой", needed: 10 - completed, total: 10 };
   return null;

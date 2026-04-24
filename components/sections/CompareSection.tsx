@@ -60,9 +60,9 @@ export function CompareSection() {
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           variants={fadeUp}
-          className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm"
+          className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-sm md:overflow-hidden"
         >
-          <div className="grid grid-cols-3 border-b border-black/[0.06]">
+          <div className="min-w-[640px] grid grid-cols-3 border-b border-black/[0.06] md:min-w-0">
             <div className="p-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
               Возможность
             </div>
@@ -74,7 +74,7 @@ export function CompareSection() {
             </div>
           </div>
 
-          <motion.div variants={staggerContainer}>
+          <motion.div variants={staggerContainer} className="min-w-[640px] md:min-w-0">
             {ROWS.map((row, i) => (
               <motion.div
                 key={row.feature}

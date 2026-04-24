@@ -1,10 +1,11 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
+import { ANCHOR_OPERATOR_EMAIL } from "@/lib/auth/anchorRoles";
 import { createAdminClient } from "@/lib/supabase/server";
 
-const DEFAULT_CLIENT_EMAIL = "buzanovnikita30@gmailcom";
-const DEFAULT_OPERATOR_EMAIL = "nbuzanov0@mailru";
+/** В dev не подставляйте якорный email админа — он зарезервирован (см. lib/auth/anchorRoles.ts) */
+const DEFAULT_CLIENT_EMAIL = "dev+client@local.test";
 
 export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const targetEmail =
     who === "operator"
-      ? process.env.DEV_OPERATOR_EMAIL ?? DEFAULT_OPERATOR_EMAIL
+      ? process.env.DEV_OPERATOR_EMAIL ?? ANCHOR_OPERATOR_EMAIL
       : process.env.DEV_CLIENT_EMAIL ?? DEFAULT_CLIENT_EMAIL;
 
   const admin = createAdminClient();

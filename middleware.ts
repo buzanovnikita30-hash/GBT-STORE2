@@ -1,5 +1,6 @@
 ﻿import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { effectiveRoleFromProfile } from "@/lib/auth/superAdmin";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -28,7 +29,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
 
-  const protectedPaths = ["/dashboard", "/admin", "/checkout"];
+  const protectedPaths = ["/dashboard", "/admin", "/checkout", "/support"];
   const isProtected = protectedPaths.some((p) => path.startsWith(p));
   const isAuthPage = path.startsWith("/login") || path.startsWith("/register");
   const canSwitchAccount = request.nextUrl.searchParams.get("switch") === "1";
@@ -41,19 +42,21 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isAuthPage && user && !canSwitchAccount) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  if (path.startsWith("/admin")) {
-    if (!user) return NextResponse.redirect(new URL("/login", request.url));
-    const { data: profile } = await supabase
+    const { data: prof } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
-      .single();
-    if (!profile || !["admin", "operator"].includes(profile.role ?? "")) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      .maybeSingle();
+    const role = effectiveRoleFromProfile(prof?.role ?? null, user.email);
+    const isAdmin = role === "admin";
+    const isOp = role === "operator";
+    if (isAdmin) {
+      return NextResponse.redirect(new URL("/admin", request.url));
     }
+    if (isOp) {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return supabaseResponse;

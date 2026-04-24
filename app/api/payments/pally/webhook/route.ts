@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { incrementPromocodeUsage } from "@/lib/promocodes/db-promo";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPallyWebhook, mapPallyStatus } from "@/lib/payments/pally";
-import { notifyPaymentStatus } from "@/lib/telegram/notifications";
+import { notifyCustomerOrderStatus, notifyPaymentStatus } from "@/lib/telegram/notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,10 +44,35 @@ export async function POST(request: NextRequest) {
 
     await supabase.from("orders").update(updateData).eq("id", orderId);
 
+    const becamePaidLike =
+      !["paid", "activating", "active", "waiting_client"].includes(order.status) &&
+      (updateData.status === "activating" || internalStatus === "paid");
+    if (becamePaidLike) {
+      const meta = order.meta as Record<string, unknown> | null;
+      const promoCode = typeof meta?.promo_code === "string" ? meta.promo_code : null;
+      await incrementPromocodeUsage(supabase, promoCode).catch(() => undefined);
+    }
+
     await notifyPaymentStatus(
       { id: order.id, plan_name: order.plan_id, price: order.price, account_email: order.account_email ?? undefined },
       internalStatus
     );
+    if (order.user_id) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", order.user_id)
+        .maybeSingle();
+      if (profile?.email) {
+        await notifyCustomerOrderStatus({
+          customerEmail: profile.email,
+          orderId: order.id,
+          planName: order.plan_id,
+          status: updateData.status as string,
+          price: order.price,
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

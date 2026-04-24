@@ -1,18 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ShoppingBag, MessageCircle, User } from 'lucide-react'
+import { useSafePathname } from '@/lib/client/useSafePathname'
 
 const NAV = [
   { href: '/dashboard', label: 'Главная', icon: LayoutDashboard },
   { href: '/dashboard/orders', label: 'Заказы', icon: ShoppingBag },
-  { href: '/support', label: 'Поддержка', icon: MessageCircle },
+  { href: '/dashboard/chat', label: 'Поддержка', icon: MessageCircle },
   { href: '/dashboard/profile', label: 'Профиль', icon: User },
 ]
 
 export function DashboardNav() {
-  const pathname = usePathname()
+  const pathname = useSafePathname()
 
   return (
     <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
@@ -45,7 +45,7 @@ export function DashboardNav() {
 }
 
 export function DashboardMobileNav() {
-  const pathname = usePathname()
+  const pathname = useSafePathname()
 
   return (
     <nav className="flex gap-4">

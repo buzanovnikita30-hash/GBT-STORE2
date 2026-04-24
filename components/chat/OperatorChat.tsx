@@ -3,67 +3,72 @@
 import { useEffect, useRef, useState } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClient } from "@/lib/supabase/client";
-import { QuickReplyButtons } from "@/components/ui/QuickReplyButtons";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, ChatSenderType } from "@/types";
 
 interface Props {
   sessionId: string;
   userId: string;
+  initialMessages?: ChatMessage[];
+  /** Пишет в чат сотрудник (из того же дашборда) — визуал «свои» пузыри и optimistic sender_type. */
+  replyAsOperator?: boolean;
 }
 
-const QUICK_REPLY_MESSAGES: Record<string, string> = {
-  "send-token": "Хочу отправить токен",
-  "get-token": "Как получить токен?",
-  "how-long": "Когда активируют подписку?",
-  "is-safe": "Это безопасно?",
-  "other": "Другой вопрос",
-};
+const CLIENT_FAQ_QUESTIONS = [
+  "Как оформить заказ?",
+  "Когда будет готова подписка?",
+  "Сколько стоит подписка?",
+  "Как передать данные для активации?",
+  "Есть ли гарантия на подписку?",
+  "Можно ли оплатить картой РФ?",
+  "Что делать если не работает вход?",
+];
 
-export function OperatorChat({ sessionId, userId }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function OperatorChat({ sessionId, userId, initialMessages = [], replyAsOperator = false }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const isSendingRef = useRef(false);
+  const [loadingMessages, setLoadingMessages] = useState(initialMessages.length === 0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const supabase = createClient();
+    isSendingRef.current = isSending;
+  }, [isSending]);
 
-    // Загружаем историю
-    supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("session_id", sessionId)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (data) setMessages(data as ChatMessage[]);
-      });
+  useEffect(() => {
+    let stopped = false;
 
-    // Realtime подписка на новые сообщения
-    const channel = supabase
-      .channel(`chat-${sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as ChatMessage]);
-          // Прокрутка вниз
-          setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, 50);
+    const loadMessages = async () => {
+      if (isSendingRef.current) return;
+      try {
+        const response = await fetch(
+          `/api/chat/operator/guest/messages?userId=${encodeURIComponent(userId)}`
+        );
+        const payload = (await response.json()) as { messages?: ChatMessage[] };
+
+        if (!stopped && response.ok) {
+          const nextMessages = payload.messages ?? [];
+          setMessages(nextMessages);
         }
-      )
-      .subscribe();
+      } finally {
+        if (!stopped) {
+          setLoadingMessages(false);
+        }
+      }
+    };
 
-    return () => { supabase.removeChannel(channel); };
-  }, [sessionId]);
+    // Always refresh once in background to ensure we have the latest state.
+    void loadMessages();
+    const poll = setInterval(() => {
+      void loadMessages();
+    }, 1500);
+
+    return () => {
+      stopped = true;
+      clearInterval(poll);
+    };
+  }, [sessionId, userId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,96 +76,189 @@ export function OperatorChat({ sessionId, userId }: Props) {
 
   async function sendMessage(text: string) {
     if (!text.trim() || isSending) return;
-    setShowQuickReplies(false);
+    const content = text.trim();
     setInput("");
     setIsSending(true);
+    isSendingRef.current = true;
 
-    const supabase = createClient();
-    await supabase.from("chat_messages").insert({
+    const outgoingType: ChatSenderType = replyAsOperator ? "operator" : "client";
+
+    const optimisticMessage: ChatMessage = {
+      id: `temp-${Date.now()}`,
       session_id: sessionId,
       sender_id: userId,
-      sender_type: "client",
-      content: text,
-    });
+      sender_type: outgoingType,
+      content,
+      attachments: null,
+      is_read: false,
+      is_auto_reply: false,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticMessage]);
 
-    // Обновляем first_message_at если ещё нет
-    await supabase
-      .from("chat_sessions")
-      .update({ first_message_at: new Date().toISOString() })
-      .eq("id", sessionId)
-      .is("first_message_at", null);
+    try {
+      const response = await fetch("/api/chat/operator/guest/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, content }),
+      });
 
-    setIsSending(false);
+      if (!response.ok) {
+        throw new Error("send failed");
+      }
+
+      const refreshed = await fetch(
+        `/api/chat/operator/guest/messages?userId=${encodeURIComponent(userId)}`
+      );
+      const payload = (await refreshed.json()) as { messages?: ChatMessage[] };
+      if (refreshed.ok) {
+        setMessages(payload.messages ?? []);
+      }
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          session_id: sessionId,
+          sender_id: null,
+          sender_type: "auto",
+          content: "Не удалось отправить сообщение. Попробуйте еще раз.",
+          attachments: null,
+          is_read: false,
+          is_auto_reply: true,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      isSendingRef.current = false;
+      setIsSending(false);
+    }
   }
+
+  const isOwnBubble = (msg: ChatMessage) => {
+    if (msg.sender_id) return msg.sender_id === userId;
+    if (msg.sender_type === "client" || msg.sender_type === "operator") {
+      return msg.sender_type === (replyAsOperator ? "operator" : "client");
+    }
+    return false;
+  };
 
   const senderColor = (type: string) => {
     if (type === "client") return "bg-[#10a37f] text-white";
     if (type === "ai") return "bg-blue-100 text-blue-800";
     if (type === "auto") return "bg-gray-100 text-gray-600 italic";
+    if (type === "operator") return "bg-gray-100 text-gray-800";
+    if (type === "admin") return "bg-amber-50 text-amber-900";
     return "bg-gray-100 text-gray-800";
   };
 
   const senderLabel = (type: string) => {
     if (type === "operator") return "Оператор";
+    if (type === "admin") return "Админ";
     if (type === "ai") return "AI помощник";
     if (type === "auto") return "Авто-ответ";
     return null;
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((msg) => {
-          const isOwnMessage = msg.sender_type === "client";
-          return (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn("flex", isOwnMessage ? "justify-end" : "justify-start")}
-            >
-              <div className="max-w-[80%]">
-                {!isOwnMessage && senderLabel(msg.sender_type) && (
-                  <p className="mb-1 text-[10px] font-semibold text-gray-400">
-                    {senderLabel(msg.sender_type)}
-                    {msg.is_auto_reply && " (авто)"}
-                  </p>
-                )}
-                <div className={cn("rounded-2xl px-4 py-2.5 text-sm leading-relaxed", senderColor(msg.sender_type))}>
-                  {msg.content}
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {showQuickReplies && messages.length <= 1 && (
-        <div className="border-t border-black/[0.06] px-4 py-3">
-          <QuickReplyButtons
-            onSelect={(id) => sendMessage(QUICK_REPLY_MESSAGES[id] ?? id)}
-          />
+    <div className="flex h-full min-h-0 w-full overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="bg-[#10a37f] px-4 pb-3 pt-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
+              G
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">GBT STORE — поддержка</p>
+              <p className="text-xs text-white/80">На связи</p>
+            </div>
+          </div>
+          <div className="mt-3 rounded-lg bg-white/15 p-0.5">
+            <div className="rounded-md bg-white py-1.5 text-center text-xs font-medium text-[#10a37f]">
+              Оператор
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className="border-t border-black/[0.06] p-3">
-        <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Напишите оператору..."
-            className="flex-1 rounded-xl border border-black/[0.1] px-3 py-2 text-sm outline-none focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/20"
-          />
-          <button
-            type="submit"
-            disabled={isSending || !input.trim()}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#10a37f] text-white disabled:opacity-40"
-          >
-            {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          </button>
-        </form>
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {loadingMessages && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Loader2 size={14} className="animate-spin" />
+              Загружаем сообщения...
+            </div>
+          )}
+          {messages.length === 0 && (
+            <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+              Напишите сообщение, оператор ответит в этом чате.
+            </div>
+          )}
+
+          {messages.map((msg) => {
+            const isOwnMessage = isOwnBubble(msg);
+            return (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn("flex", isOwnMessage ? "justify-end" : "justify-start")}
+              >
+                <div className="max-w-[82%]">
+                  {!isOwnMessage && senderLabel(msg.sender_type) && (
+                    <p className="mb-1 text-[10px] font-semibold text-gray-400">
+                      {senderLabel(msg.sender_type)}
+                      {msg.is_auto_reply && " (авто)"}
+                    </p>
+                  )}
+                  <div
+                    className={cn(
+                      "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                      isOwnMessage
+                        ? "bg-[#10a37f] text-white"
+                        : senderColor(msg.sender_type)
+                    )}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="border-t border-black/[0.06] px-3 py-2">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+            {CLIENT_FAQ_QUESTIONS.map((question) => (
+              <button
+                key={question}
+                type="button"
+                onClick={() => sendMessage(question)}
+                className="shrink-0 rounded-full border border-[#10a37f]/30 px-3 py-1.5 text-xs text-[#10a37f] transition-colors hover:bg-[#10a37f]/10"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-black/[0.06] p-3">
+          <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Напишите оператору..."
+              className="flex-1 rounded-xl border border-black/[0.1] px-3 py-2 text-sm outline-none focus:border-[#10a37f] focus:ring-2 focus:ring-[#10a37f]/20"
+            />
+            <button
+              type="submit"
+              disabled={isSending || !input.trim()}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#10a37f] text-white disabled:opacity-40"
+            >
+              {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

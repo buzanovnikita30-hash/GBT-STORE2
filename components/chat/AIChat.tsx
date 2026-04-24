@@ -52,7 +52,7 @@ export function AIChat() {
     setIsTyping(true);
 
     try {
-      const res = await fetch("/api/chat/ai", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -60,28 +60,17 @@ export function AIChat() {
         }),
       });
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         throw new Error("Request failed");
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accum = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        accum += decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { role: "assistant", content: accum, streaming: true };
-          return copy;
-        });
-      }
+      const data = (await res.json()) as { content?: string };
+      const content = data.content?.trim();
+      if (!content) throw new Error("Empty response");
 
       setMessages((prev) => {
         const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", content: accum, streaming: false };
+        copy[copy.length - 1] = { role: "assistant", content, streaming: false };
         return copy;
       });
     } catch (err) {
@@ -156,7 +145,7 @@ export function AIChat() {
                 key={q.id}
                 type="button"
                 onClick={() => sendMessage(q.text)}
-                className="shrink-0 rounded-full border border-[#10a37f]/30 px-3 py-1.5 text-xs text-[#10a37f] hover:bg-[#10a37f]/5 transition-colors"
+                className="shrink-0 rounded-full border border-[#10a37f]/30 px-3 py-1.5 text-xs text-[#10a37f] transition-colors duration-100 hover:bg-[#10a37f]/5"
               >
                 {q.label}
               </button>
@@ -176,12 +165,12 @@ export function AIChat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Напишите вопрос..."
-            className="flex-1 rounded-full bg-gray-100 px-4 py-2 text-sm outline-none focus:bg-gray-50 focus:ring-2 focus:ring-[#10a37f]/20 transition-all"
+            className="flex-1 rounded-full bg-gray-100 px-4 py-2 text-sm outline-none transition-colors duration-100 focus:bg-gray-50 focus:ring-2 focus:ring-[#10a37f]/20"
           />
           <button
             type="submit"
             disabled={isTyping || !input.trim()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white transition-opacity duration-100 hover:opacity-90 disabled:opacity-40"
           >
             <Send size={14} />
           </button>

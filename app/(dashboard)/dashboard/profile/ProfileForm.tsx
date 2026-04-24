@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Check } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { profileUpdateSchema, type ProfileUpdateInput } from "@/lib/validations";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +19,6 @@ function formatAccountCreated(iso: string): string | null {
 }
 
 interface Props {
-  userId: string;
   initialData: {
     username: string;
     telegram_username: string;
@@ -29,7 +27,7 @@ interface Props {
   };
 }
 
-export function ProfileForm({ userId, initialData }: Props) {
+export function ProfileForm({ initialData }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const accountCreatedLabel = formatAccountCreated(initialData.createdAt);
@@ -45,14 +43,15 @@ export function ProfileForm({ userId, initialData }: Props) {
 
   async function onSubmit(data: ProfileUpdateInput) {
     setError(null);
-    const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update(data)
-      .eq("id", userId);
+    const res = await fetch("/api/profile/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const json = (await res.json()) as { error?: string };
 
-    if (updateError) {
-      setError(updateError.message);
+    if (!res.ok) {
+      setError(json.error ?? "Не удалось сохранить профиль");
       return;
     }
     setSaved(true);

@@ -15,7 +15,12 @@ export function GuestOperatorChat() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    isSendingRef.current = isSending;
+  }, [isSending]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -51,6 +56,7 @@ export function GuestOperatorChat() {
     };
 
     const loadMessages = async (sid: string) => {
+      if (isSendingRef.current) return;
       const res = await fetch(`/api/chat/operator/guest/messages?sessionId=${encodeURIComponent(sid)}`);
       const data = (await res.json()) as { messages?: ChatMessage[] };
       if (!stopped && res.ok) {
@@ -77,6 +83,7 @@ export function GuestOperatorChat() {
     if (!text || !sessionId || isSending) return;
 
     setIsSending(true);
+    isSendingRef.current = true;
     setInput("");
 
     const optimistic: ChatMessage = {
@@ -122,11 +129,13 @@ export function GuestOperatorChat() {
       if (refreshed.ok) setMessages(data.messages ?? []);
     }
 
+    isSendingRef.current = false;
     setIsSending(false);
   }
 
   const labelByType = (type: ChatMessage["sender_type"]) => {
     if (type === "operator") return "Оператор";
+    if (type === "admin") return "Админ";
     if (type === "auto") return "Авто-ответ";
     if (type === "ai") return "AI";
     return null;
@@ -135,6 +144,7 @@ export function GuestOperatorChat() {
   const bubbleByType = (type: ChatMessage["sender_type"]) => {
     if (type === "client") return "bg-[#10a37f] text-white";
     if (type === "operator") return "bg-blue-100 text-blue-800";
+    if (type === "admin") return "bg-amber-50 text-amber-900";
     if (type === "ai") return "bg-indigo-100 text-indigo-800";
     return "bg-gray-100 text-gray-700";
   };

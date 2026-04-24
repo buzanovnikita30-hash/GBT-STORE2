@@ -3,7 +3,9 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolvePostLoginPath } from "@/lib/auth/postLoginPath";
 import { Loader2 } from "lucide-react";
+import type { UserRole } from "@/types/database";
 
 export function CallbackContent() {
   const router = useRouter();
@@ -21,18 +23,24 @@ export function CallbackContent() {
     let cancelled = false;
 
     if (type === "recovery") {
-      router.push("/reset-password/update");
+      router.push(`/reset-password/update?returnUrl=${encodeURIComponent(returnUrl)}`);
       return;
     }
 
     const redirectToTarget = async () => {
       const { data } = await supabase.auth.getSession();
       if (!cancelled && data.session) {
-        await fetch("/api/auth/sync-role", {
+        const syncRes = await fetch("/api/auth/sync-role", {
           method: "POST",
           headers: { Authorization: `Bearer ${data.session.access_token}` },
         });
-        router.replace(returnUrl);
+        const syncBody = (await syncRes.json().catch(() => ({}))) as { role?: UserRole };
+        const role: UserRole =
+          syncBody.role === "admin" || syncBody.role === "operator" || syncBody.role === "client"
+            ? syncBody.role
+            : "client";
+        const target = resolvePostLoginPath(returnUrl, role);
+        router.replace(target);
         router.refresh();
       }
     };
@@ -46,18 +54,8 @@ export function CallbackContent() {
 
     void finishAuth();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        router.replace(returnUrl);
-        router.refresh();
-      }
-    });
-
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
     };
   }, [router, searchParams]);
 

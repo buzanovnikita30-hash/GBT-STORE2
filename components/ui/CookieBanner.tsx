@@ -45,9 +45,9 @@ export function CookieBanner() {
         >
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-gray-600 leading-relaxed">
-              Мы используем{" "}
-              <a href="/privacy" className="text-[#10a37f] hover:underline">куки</a>{" "}
-              для улучшения сайта. Аналитика помогает нам работать лучше.
+              Мы бережно относимся к вашим данным. Используем только необходимые технические данные
+              и обезличенную аналитику для стабильной работы сервиса. Подробнее — в{" "}
+              <a href="/privacy" className="text-[#10a37f] hover:underline">политике конфиденциальности</a>.
             </p>
             <button
               type="button"

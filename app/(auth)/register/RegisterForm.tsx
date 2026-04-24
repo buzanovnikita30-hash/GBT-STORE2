@@ -26,7 +26,7 @@ export function RegisterForm() {
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/callback`,
+        emailRedirectTo: `${window.location.origin}/callback?returnUrl=/?verified=1`,
       },
     });
     if (error) {

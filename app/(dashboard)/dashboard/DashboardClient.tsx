@@ -117,7 +117,7 @@ export function DashboardClient({
                   {order.product === "chatgpt-plus" ? "ChatGPT Plus" : "ChatGPT Pro"} — {order.plan_id}
                 </p>
                 <Link
-                  href="/support"
+                  href="/dashboard/chat"
                   className="text-xs text-[#10a37f] hover:underline"
                 >
                   Написать в чат
@@ -128,7 +128,9 @@ export function DashboardClient({
                 initialStatus={order.status as OrderStatus}
                 planId={order.plan_id}
                 activatedAt={order.activated_at ?? undefined}
-                onOpenChat={() => window.open("/support", "_blank")}
+                onOpenChat={() => {
+                  window.location.href = "/dashboard/chat";
+                }}
               />
             </div>
           ))}
@@ -221,18 +223,18 @@ export function DashboardClient({
       {/* CTA buttons */}
       <motion.div {...FU} transition={{ ...FU.transition, delay: 0.35 }} className="flex flex-wrap gap-3 pt-1">
         <Link
-          href="/support"
-          className="flex items-center gap-2 rounded-xl bg-[#10a37f] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#10a37f]/20 hover:opacity-90 transition-opacity"
-        >
-          <MessageCircle size={16} />
-          Написать в поддержку
-        </Link>
-        <Link
           href="/checkout"
-          className="flex items-center gap-2 rounded-xl border border-[#10a37f]/30 px-5 py-2.5 text-sm font-semibold text-[#10a37f] hover:bg-[#10a37f]/5 transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-[#10a37f] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#10a37f]/20 transition-opacity hover:opacity-90"
         >
           <Plus size={16} />
           Новый заказ
+        </Link>
+        <Link
+          href="/dashboard/chat"
+          className="flex items-center gap-2 rounded-xl border border-[#10a37f]/30 px-5 py-2.5 text-sm font-semibold text-[#10a37f] transition-colors hover:bg-[#10a37f]/5"
+        >
+          <MessageCircle size={16} />
+          Написать в поддержку
         </Link>
       </motion.div>
     </div>

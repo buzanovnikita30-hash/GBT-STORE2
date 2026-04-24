@@ -1,20 +1,34 @@
 ﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Send, Home, MessageCircle, ShoppingBag, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { OperatorChat } from "@/components/chat/OperatorChat";
-import { GuestOperatorChat } from "@/components/chat/GuestOperatorChat";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
-
-type Tab = "ai" | "operator";
+import { resolveClientNavRole } from "@/lib/auth/anchorRoles";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   time: string;
+}
+
+type OrderStatus =
+  | "pending"
+  | "paid"
+  | "activating"
+  | "waiting_client"
+  | "active"
+  | "failed"
+  | "refunded"
+  | "expired";
+
+interface LatestOrderInfo {
+  id: string;
+  status: OrderStatus;
+  created_at: string;
+  plan_id: string | null;
+  product: string | null;
 }
 
 const getTime = () =>
@@ -23,10 +37,10 @@ const getTime = () =>
 const QUICK = [
   { label: "Как оформить заказ", msg: "Как оформить заказ?" },
   { label: "Сколько стоит", msg: "Сколько стоит подписка?" },
-  { label: "Срок активации", msg: "За какое время выполняете активацию?" },
-  { label: "Гарантия", msg: "Какая гарантия на подписку?" },
-  { label: "Оплата не проходит", msg: "Не проходит оплата, что делать?" },
-  { label: "Как продлить", msg: "Как продлить подписку?" },
+  { label: "Срок активации", msg: "Когда будет готова подписка?" },
+  { label: "Гарантия", msg: "Есть ли гарантия на подписку?" },
+  { label: "Оплата из РФ", msg: "Можно ли оплатить картой РФ?" },
+  { label: "Как продлить", msg: "Есть ли скидки на продление?" },
 ];
 
 const FAQ_ITEMS = [
@@ -47,6 +61,96 @@ const FAQ_ITEMS = [
   "Как оформить возврат средств?",
 ];
 
+const FAQ_SCRIPTED_ANSWERS: Record<string, string> = {
+  "Как оформить заказ?":
+    "Выберите подходящий тариф, оплатите и отправьте данные для активации. Подключение обычно занимает 5-15 минут.",
+  "Сколько стоит подписка?":
+    "Актуальные цены: Plus — 1 490 / 1 990 / 2 490 ₽, Pro — 14 990 ₽.",
+  "Есть ли гарантия на подписку?":
+    "Да. Если активация не проходит по нашей стороне, мы оформляем возврат.",
+  "Как активировать ChatGPT Plus?":
+    "После оплаты отправляете данные для активации, и мы подключаем подписку. Обычно это занимает до 15 минут.",
+  "Чем отличается Plus от Pro?":
+    "Plus подходит для большинства задач. Pro — для максимальной нагрузки и более интенсивного использования.",
+  "Как передать данные для активации?":
+    "Передаются только данные для активации, пароль от аккаунта не нужен.",
+  "Когда будет готова подписка?":
+    "Обычно подписка готова в течение 5-15 минут после оплаты и передачи данных.",
+  "Можно ли оплатить картой РФ?":
+    "Да, оплата из РФ доступна: карта, СБП или крипта.",
+  "Работаете ли вы в выходные?":
+    "Да, поддержка работает ежедневно, включая выходные.",
+  "Как связаться с поддержкой?":
+    "Напишите во вкладку «Оператор» или в Telegram: t.me/subs_support.",
+  "Что делать если не работает вход?":
+    "Проверьте корректность email и повторите вход. Если не помогает, напишите оператору для ручной помощи.",
+  "Есть ли скидки на продление?":
+    "По продлению условия подбираются индивидуально. Напишите оператору, он подскажет лучший вариант.",
+  "Как отменить автопродление?":
+    "Автопродление отключается в настройках аккаунта OpenAI в разделе подписки.",
+  "Где посмотреть статус заказа?":
+    "Статус уточняется у оператора по времени оплаты и контактам из заявки.",
+  "Как оформить возврат средств?":
+    "По возврату напишите оператору: проверим заказ и подскажем следующий шаг.",
+};
+
+const normalizeFaqKey = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const NORMALIZED_FAQ_ANSWERS: Record<string, string> = Object.fromEntries(
+  Object.entries(FAQ_SCRIPTED_ANSWERS).map(([question, answer]) => [normalizeFaqKey(question), answer])
+);
+const ORDER_STATUS_FAQ_KEY = normalizeFaqKey("Где посмотреть статус заказа?");
+
+const ORDER_STAGE_LABELS: Record<OrderStatus, string> = {
+  pending: "Ожидает оплату",
+  paid: "Оплата подтверждена",
+  activating: "В работе",
+  waiting_client: "Ждем данные клиента",
+  active: "Активировано",
+  failed: "Ошибка",
+  refunded: "Возврат",
+  expired: "Истекло",
+};
+
+const ORDER_STAGE_HINTS: Record<OrderStatus, string> = {
+  pending: "Ожидаем оплату. После подтверждения сразу передадим в работу.",
+  paid: "Платеж получен. Специалист готовит активацию.",
+  activating: "Подключаем подписку прямо сейчас.",
+  waiting_client: "Нужны данные для активации. Напишите оператору.",
+  active: "Подписка успешно активирована.",
+  failed: "По заказу возникла ошибка. Оператор уже поможет решить.",
+  refunded: "Оформлен возврат средств.",
+  expired: "Срок подписки завершился. Можно продлить у оператора.",
+};
+
+const ORDER_STATUS_PROGRESS: Record<OrderStatus, number> = {
+  pending: 1,
+  paid: 2,
+  activating: 3,
+  waiting_client: 3,
+  active: 4,
+  failed: 4,
+  refunded: 4,
+  expired: 4,
+};
+
+function buildOrderStatusAnswer(order: LatestOrderInfo | null): string {
+  if (!order) {
+    return "У вас пока нет активных заказов. Если хотите, оператор поможет оформить подписку за пару минут.";
+  }
+
+  const stage = ORDER_STAGE_LABELS[order.status] ?? "В обработке";
+  const hint = ORDER_STAGE_HINTS[order.status] ?? "Оператор подскажет детали по вашему заказу.";
+
+  return `Текущий этап заказа: ${stage}. ${hint}`;
+}
+
 const NAV = [
   { Icon: Home, label: "Главная", href: "/" },
   { Icon: MessageCircle, label: "Поддержка", href: "/support" },
@@ -56,7 +160,7 @@ const NAV = [
 
 export default function SupportPage() {
   const pathname = usePathname();
-  const [tab, setTab] = useState<Tab>("ai");
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -66,148 +170,96 @@ export default function SupportPage() {
     },
   ]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [operatorSessionId, setOperatorSessionId] = useState<string | null>(null);
-  const [sessionLoading, setSessionLoading] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [latestOrder, setLatestOrder] = useState<LatestOrderInfo | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages]);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-      setAuthLoading(false);
+      setIsAuthorized(Boolean(data.session?.user));
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null);
-      setAuthLoading(false);
+      setIsAuthorized(Boolean(session?.user));
     });
     return () => subscription.unsubscribe();
   }, []);
 
+  const goToLiveChat = () => {
+    void (async () => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) {
+        router.push("/login?returnUrl=/dashboard/chat");
+        return;
+      }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, email")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+      const r = resolveClientNavRole(prof?.email ?? auth.user.email, prof?.role ?? "client");
+      if (r === "admin") router.push("/admin/chat");
+      else if (r === "operator") router.push("/admin/chat");
+      else router.push("/dashboard/chat");
+    })();
+  };
+
   useEffect(() => {
-    if (!user) {
-      setOperatorSessionId(null);
+    if (!isAuthorized) {
+      setLatestOrder(null);
       return;
     }
 
-    let isCancelled = false;
-    const supabase = createClient();
-
-    const loadOrCreateOperatorSession = async () => {
-      setSessionLoading(true);
-
-      const { data: existing, error: selectError } = await supabase
-        .from("chat_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "open")
+    const loadLatestOrder = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("orders")
+        .select("id,status,created_at,plan_id,product")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (isCancelled) return;
-
-      if (selectError && selectError.code !== "PGRST116") {
-        console.error("[Support] Не удалось загрузить chat_session:", selectError);
-      }
-
-      if (existing?.id) {
-        setOperatorSessionId(existing.id);
-        setSessionLoading(false);
-        return;
-      }
-
-      const { data: created, error: createError } = await supabase
-        .from("chat_sessions")
-        .insert({
-          user_id: user.id,
-          type: "operator",
-          status: "open",
-        })
-        .select("id")
-        .single();
-
-      if (isCancelled) return;
-
-      if (createError) {
-        console.error("[Support] Не удалось создать chat_session:", createError);
-        setOperatorSessionId(null);
+      if (data) {
+        setLatestOrder(data as LatestOrderInfo);
       } else {
-        setOperatorSessionId(created.id);
+        setLatestOrder(null);
       }
-
-      setSessionLoading(false);
     };
 
-    loadOrCreateOperatorSession();
+    void loadLatestOrder();
+  }, [isAuthorized]);
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [user]);
-
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || isTyping) return;
+  const sendMessage = (text: string) => {
+    if (!text.trim()) return;
+    if (isAuthorized === null) return;
+    if (!isAuthorized) {
+      router.push("/login");
+      return;
+    }
     setInput("");
     const userMsg: Message = { role: "user", content: text, time: getTime() };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
-    setIsTyping(true);
-    setMessages((prev) => [...prev, { role: "assistant", content: "", time: getTime() }]);
+    const normalizedText = normalizeFaqKey(text);
+    let scriptedAnswer =
+      NORMALIZED_FAQ_ANSWERS[normalizedText] ??
+      "Ваш вопрос передан оператору. Пожалуйста, дождитесь ответа — оператор подключится и поможет.";
 
-    try {
-      const apiMessages = updated
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role, content: m.content }))
-        .filter((m) => m.content.trim());
-
-      const res = await fetch("/api/chat/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("no reader");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last?.role === "assistant") {
-            copy[copy.length - 1] = { ...last, content: last.content + chunk };
-          }
-          return copy;
-        });
-      }
-    } catch {
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = {
-          role: "assistant",
-          content:
-            "Не удалось получить ответ. Напишите нам в Telegram или повторите попытку позже.",
-          time: getTime(),
-        };
-        return copy;
-      });
-    } finally {
-      setIsTyping(false);
+    if (normalizedText === ORDER_STATUS_FAQ_KEY) {
+      scriptedAnswer = buildOrderStatusAnswer(latestOrder);
     }
+
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      { role: "assistant", content: scriptedAnswer, time: getTime() },
+    ]);
   };
 
   const showQuickReplies = messages.length <= 1;
@@ -223,7 +275,7 @@ export default function SupportPage() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-30 flex h-full w-60 flex-col bg-[#111827] transition-transform duration-300 lg:static lg:translate-x-0 ${
+        className={`fixed left-0 top-0 z-30 flex h-full w-60 flex-col bg-[#111827] transition-transform duration-150 lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -244,7 +296,7 @@ export default function SupportPage() {
               <a
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all ${
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors duration-100 ${
                   isActive
                     ? "border-l-2 border-[#10a37f] bg-[#10a37f]/15 pl-2.5 text-[#10a37f]"
                     : "text-gray-400 hover:bg-white/5 hover:text-white"
@@ -282,7 +334,7 @@ export default function SupportPage() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="bg-[#10a37f] px-4 pb-0 pt-4">
-            <div className="flex items-center justify-between pb-3">
+            <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-lg font-bold text-white">
                   G
@@ -295,137 +347,117 @@ export default function SupportPage() {
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={goToLiveChat}
+                className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-[#10a37f] shadow-sm transition-opacity hover:opacity-95"
+              >
+                Чат с оператором
+              </button>
             </div>
 
-            <div className="mx-0 mb-3 flex gap-1 rounded-lg bg-white/15 p-0.5">
-              {(["ai", "operator"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className="flex-1 rounded-md py-1.5 text-xs font-medium transition-all"
-                  style={{
-                    backgroundColor: tab === t ? "white" : "transparent",
-                    color: tab === t ? "#10a37f" : "rgba(255,255,255,0.85)",
-                  }}
-                >
-                  {t === "ai" ? "ИИ-ассистент" : "Оператор"}
-                </button>
-              ))}
+            <div className="mx-0 mb-3 rounded-lg bg-white/15 p-0.5">
+              <div className="rounded-md bg-white py-1.5 text-center text-xs font-medium text-[#10a37f]">
+                Быстрые ответы ниже · живой чат — кнопка справа
+              </div>
             </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-            {tab === "ai" ? (
-              <>
-                <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                  {messages.map((msg, i) => (
-                    <motion.div
-                      key={`${i}-${msg.time}`}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div className="max-w-[75%]">
-                        <div
-                          className={`p-3 text-sm leading-relaxed ${
-                            msg.role === "user"
-                              ? "bg-[#10a37f] text-white"
-                              : "bg-gray-100 text-gray-900"
-                          }`}
-                          style={{
-                            borderRadius:
-                              msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                          }}
-                        >
-                          {msg.content}
-                          {msg.role === "assistant" && msg.content === "" && isTyping && (
-                            <div className="flex gap-1 py-0.5">
-                              {[0, 1, 2].map((j) => (
-                                <motion.div
-                                  key={j}
-                                  className="h-2 w-2 rounded-full bg-gray-400"
-                                  animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
-                                  transition={{ duration: 0.7, repeat: Infinity, delay: j * 0.15 }}
-                                />
-                              ))}
-                            </div>
-                          )}
-                          {msg.role === "assistant" &&
-                            msg.content !== "" &&
-                            i === messages.length - 1 &&
-                            isTyping && (
-                              <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-gray-500 align-middle" />
-                            )}
-                        </div>
-                        <p className="mt-1 px-1 text-[10px] text-gray-400">{msg.time}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {showQuickReplies && (
-                  <div className="border-t border-gray-100 px-3 py-2">
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
-                      {QUICK.map((q) => (
-                        <button
-                          key={q.msg}
-                          type="button"
-                          onClick={() => sendMessage(q.msg)}
-                          className="shrink-0 rounded-full border border-[#10a37f]/30 px-3 py-1.5 text-xs text-[#10a37f] transition-colors hover:bg-[#10a37f]/10"
-                        >
-                          {q.label}
-                        </button>
-                      ))}
+            <>
+              {latestOrder && (
+                <div className="border-b border-gray-100 bg-[#10a37f]/5 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">Последний заказ</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {latestOrder.product === "chatgpt-pro" ? "ChatGPT Pro" : "ChatGPT Plus"}
+                        {latestOrder.plan_id ? ` · ${latestOrder.plan_id}` : ""}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Этап</p>
+                      <p className="text-sm font-semibold text-[#10a37f]">
+                        {ORDER_STAGE_LABELS[latestOrder.status]}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        Шаг {ORDER_STATUS_PROGRESS[latestOrder.status]} из 4
+                      </p>
                     </div>
                   </div>
-                )}
-
-                <div className="border-t border-gray-100 p-3">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      sendMessage(input);
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <input
-                      type="text"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder="Введите сообщение"
-                      className="flex-1 rounded-full bg-gray-100 px-4 py-2 text-sm outline-none transition-all focus:ring-2 focus:ring-[#10a37f]/20"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isTyping || !input.trim()}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                    >
-                      <Send size={14} />
-                    </button>
-                  </form>
                 </div>
-              </>
-            ) : (
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                {authLoading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#10a37f] border-t-transparent" />
-                  </div>
-                ) : sessionLoading ? (
-                  <div className="flex h-full items-center justify-center gap-3 text-sm text-gray-500">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#10a37f] border-t-transparent" />
-                    Подключаем чат с оператором...
-                  </div>
-                ) : user && operatorSessionId ? (
-                  <OperatorChat sessionId={operatorSessionId} userId={user.id} />
-                ) : (
-                  <GuestOperatorChat />
-                )}
+              )}
+
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {messages.map((msg, i) => (
+                  <motion.div
+                    key={`${i}-${msg.time}`}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className="max-w-[75%]">
+                      <div
+                        className={`p-3 text-sm leading-relaxed ${
+                          msg.role === "user" ? "bg-[#10a37f] text-white" : "bg-gray-100 text-gray-900"
+                        }`}
+                        style={{
+                          borderRadius:
+                            msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                      <p className="mt-1 px-1 text-[10px] text-gray-400">{msg.time}</p>
+                    </div>
+                  </motion.div>
+                ))}
+                <div ref={messagesEndRef} />
               </div>
-            )}
+
+              {showQuickReplies && (
+                <div className="border-t border-gray-100 px-3 py-2">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
+                    {QUICK.map((q) => (
+                      <button
+                        key={q.msg}
+                        type="button"
+                        onClick={() => sendMessage(q.msg)}
+                        className="shrink-0 rounded-full border border-[#10a37f]/30 px-3 py-1.5 text-xs text-[#10a37f] transition-colors duration-100 hover:bg-[#10a37f]/10"
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-gray-100 p-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendMessage(input);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Введите сообщение"
+                    className="flex-1 rounded-full bg-gray-100 px-4 py-2 text-sm outline-none transition-colors duration-100 focus:ring-2 focus:ring-[#10a37f]/20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!input.trim()}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#10a37f] text-white transition-opacity duration-100 hover:opacity-90 disabled:opacity-40"
+                  >
+                    <Send size={14} />
+                  </button>
+                </form>
+              </div>
+            </>
           </div>
         </div>
       </div>
@@ -441,7 +473,6 @@ export default function SupportPage() {
               key={q}
               type="button"
               onClick={() => {
-                setTab("ai");
                 sendMessage(q);
               }}
               className="group flex w-full items-center justify-between rounded-lg border-b border-gray-100 px-3 py-2.5 text-left text-sm text-gray-600 transition-all duration-150 last:border-0 hover:bg-[#10a37f]/8 hover:text-[#10a37f]"

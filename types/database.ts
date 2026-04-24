@@ -13,13 +13,14 @@ export type OrderStatus =
 export type UserRole = "client" | "operator" | "admin";
 
 export type ChatSessionStatus = "open" | "closed";
-export type ChatSenderType = "client" | "operator" | "ai" | "auto";
+export type ChatSenderType = "client" | "operator" | "admin" | "ai" | "auto";
 export type ReviewStatus = "pending" | "approved" | "rejected";
 
 export interface Database {
   public: {
     Tables: {
       profiles: {
+        Relationships: [];
         Row: {
           id: string;
           email: string | null;
@@ -31,6 +32,7 @@ export interface Database {
           last_seen: string | null;
           notes: string | null;
           tags: string[] | null;
+          client_stage: string | null;
         };
         Insert: {
           id: string;
@@ -43,10 +45,12 @@ export interface Database {
           last_seen?: string | null;
           notes?: string | null;
           tags?: string[] | null;
+          client_stage?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
       };
       orders: {
+        Relationships: [];
         Row: {
           id: string;
           user_id: string | null;
@@ -90,6 +94,7 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["orders"]["Insert"]>;
       };
       chat_sessions: {
+        Relationships: [];
         Row: {
           id: string;
           user_id: string | null;
@@ -113,6 +118,7 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["chat_sessions"]["Insert"]>;
       };
       chat_messages: {
+        Relationships: [];
         Row: {
           id: string;
           session_id: string;
@@ -138,6 +144,7 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["chat_messages"]["Insert"]>;
       };
       reviews: {
+        Relationships: [];
         Row: {
           id: string;
           telegram_message_id: number | null;
@@ -171,6 +178,7 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["reviews"]["Insert"]>;
       };
       site_settings: {
+        Relationships: [];
         Row: {
           key: string;
           value: Json;
@@ -182,6 +190,26 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["site_settings"]["Insert"]>;
+      };
+      role_audit: {
+        Relationships: [];
+        Row: {
+          id: string;
+          actor_id: string | null;
+          target_id: string | null;
+          action: string;
+          payload: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          target_id?: string | null;
+          action: string;
+          payload?: Json | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["role_audit"]["Insert"]>;
       };
     };
     Views: Record<string, never>;
